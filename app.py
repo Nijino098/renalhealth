@@ -1,10 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for
 import json
 
 app = Flask(__name__)
-app.secret_key = 'renalhealth-secret-key-2024'
 
-# ─── Skor per parameter ───────────────────────────────────────────────────────
+# --- Skor per parameter ---
 SCORING = {
     'normal': 0,
     'ringan': 1,
@@ -12,31 +11,25 @@ SCORING = {
     'berat':  3,
 }
 
-# Bobot tiap parameter terhadap risiko ginjal
 WEIGHTS = {
-    'creat': 3.0,   # Kreatinin — indikator terpenting
-    'ureum': 2.5,   # Ureum — biomarker utama
-    'bp':    2.0,   # Tekanan darah — faktor risiko utama
-    'gdp':   1.5,   # Gula darah puasa — diabetes risk
-    'g2h':   1.5,   # Gula 2 jam pp — diabetes risk
-    'hb':    1.5,   # Hemoglobin — anemia renal
-    'chol':  1.0,   # Kolesterol — risiko kardiovaskular
-    'bmi':   0.5,   # BMI — faktor tambahan
+    'creat': 3.0,
+    'ureum': 2.5,
+    'bp':    2.0,
+    'gdp':   1.5,
+    'g2h':   1.5,
+    'hb':    1.5,
+    'chol':  1.0,
+    'bmi':   0.5,
 }
-MAX_SCORE = sum(v * 3 for v in WEIGHTS.values())  # Maksimum jika semua berat
+MAX_SCORE = sum(v * 3 for v in WEIGHTS.values())
 
 
 def calculate_egfr(creat_level: str, age: int = 45) -> float:
-    """
-    Simulasi eGFR berdasarkan level kreatinin (CKD-EPI simplified).
-    Nilai default usia 45 jika tidak disediakan.
-    """
     base = {'normal': 92, 'ringan': 68, 'sedang': 38, 'berat': 14}
     return float(base.get(creat_level, 60))
 
 
 def get_ckd_stage(egfr: float) -> dict:
-    """Menentukan stadium CKD berdasarkan eGFR (KDIGO 2022)."""
     if egfr >= 90:
         return {'stage': 'G1', 'label': 'Normal', 'color': 'green',
                 'desc': 'Fungsi ginjal normal. Pemantauan rutin tetap disarankan.'}
@@ -58,7 +51,6 @@ def get_ckd_stage(egfr: float) -> dict:
 
 
 def calculate_risk(params: dict) -> dict:
-    """Hitung risiko CKD berdasarkan semua parameter input."""
     weighted_score = sum(
         WEIGHTS[param] * SCORING.get(params.get(param, 'normal'), 0)
         for param in WEIGHTS
@@ -108,7 +100,6 @@ def calculate_risk(params: dict) -> dict:
     egfr = calculate_egfr(params.get('creat', 'normal'))
     stage = get_ckd_stage(egfr)
 
-    # Detail per parameter
     details = []
     labels = {
         'gdp':   'Gula Darah Puasa (GDP)',
@@ -143,7 +134,7 @@ def calculate_risk(params: dict) -> dict:
     }
 
 
-# ─── Routes ──────────────────────────────────────────────────────────────────
+# --- Routes ---
 
 @app.route('/')
 def home():
@@ -164,29 +155,21 @@ def deteksi():
             'bmi':   request.form.get('bmi',   'normal'),
         }
         result = calculate_risk(params)
-        session['result'] = json.dumps(result)
-        session['params'] = json.dumps(params)
-        return redirect(url_for('hasil'))
+        # Kirim langsung ke hasil tanpa session
+        return render_template('hasil.html', result=result, params=params)
     return render_template('deteksi.html')
 
 
 @app.route('/hasil')
 def hasil():
-    result_raw = session.get('result')
-    params_raw = session.get('params')
-    if not result_raw:
-        return redirect(url_for('deteksi'))
-    result = json.loads(result_raw)
-    params = json.loads(params_raw)
-    return render_template('hasil.html', result=result, params=params)
+    # Kalau akses /hasil langsung tanpa POST, redirect ke deteksi
+    return redirect(url_for('deteksi'))
 
 
 @app.route('/tentang')
 def tentang():
     return render_template('home.html', scroll_to='cara-kerja')
 
-
-# ─── Entry Point ─────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     print("=" * 50)
